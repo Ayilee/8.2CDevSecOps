@@ -45,5 +45,25 @@ pipeline {
         bat 'npm audit --json > audit-report.json || exit /b 0'
       }
     }
+
+    stage('SonarCloud Analysis') {
+      steps {
+        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+          bat '''
+            powershell -Command "Invoke-WebRequest -Uri https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.1.4610-windows.zip -OutFile scanner.zip"
+            powershell -Command "Expand-Archive -Force scanner.zip ."
+            for /d %%D in (sonar-scanner-*) do set SCANDIR=%%D
+            set PATH=%CD%\\%SCANDIR%\\bin;%PATH%
+            call sonar-scanner.bat
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'audit-report.json,coverage/**', allowEmptyArchive: true
+    }
   }
 }
