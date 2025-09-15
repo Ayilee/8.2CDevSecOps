@@ -16,19 +16,22 @@ pipeline {
     }
 
     stage('Verify Tools') {
-      steps { bat 'node -v && npm -v && git --version' }
+      steps {
+        bat 'node -v && npm -v && git --version'
+      }
     }
 
     stage('Install Dependencies') {
-      steps { bat 'IF EXIST package-lock.json (npm ci) ELSE (npm install)' }
+      steps {
+        bat 'IF EXIST package-lock.json (npm ci) ELSE (npm install)'
+      }
     }
 
     stage('Run Tests') {
-      steps { bat 'npm test || exit /b 0' }          // Succeeds even if snyk needs auth
-    }
-
-    stage('Generate Coverage Report') {
-      steps { bat 'npm run coverage || exit /b 0' }  // Repo doesn’t have a coverage script, so this is soft-fail
+      steps {
+        // Keep pipeline green even if tests/Snyk require auth
+        bat 'npm test || exit /b 0'
+      }
     }
 
     stage('NPM Audit (Security Scan)') {
@@ -40,22 +43,44 @@ pipeline {
   }
 
   post {
+    always {
+      archiveArtifacts artifacts: 'audit-report.json,coverage/**', allowEmptyArchive: true
+    }
+
     success {
+      echo 'Sending success email...'
       emailext(
         to: 'ayadiscord123123@gmail.com',
         subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} SUCCESS",
-        body: "Build URL: ${env.BUILD_URL}"
+        body: """Build Succeeded
+
+Job:    ${env.JOB_NAME}
+Build:  #${env.BUILD_NUMBER}
+URL:    ${env.BUILD_URL}
+
+Artifacts:
+- audit-report.json
+- coverage/** (if generated)
+""",
+        attachLog: true,
+        compressLog: true
       )
     }
+
     failure {
+      echo 'Sending failure email...'
       emailext(
         to: 'ayadiscord123123@gmail.com',
         subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED",
-        body: "Build URL: ${env.BUILD_URL}"
+        body: """Build Failed
+
+Job:    ${env.JOB_NAME}
+Build:  #${env.BUILD_NUMBER}
+URL:    ${env.BUILD_URL}
+""",
+        attachLog: true,
+        compressLog: true
       )
-    }
-    always {
-      archiveArtifacts artifacts: 'audit-report.json,coverage/**', allowEmptyArchive: true
     }
   }
 }
