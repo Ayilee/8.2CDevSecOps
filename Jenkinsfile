@@ -29,46 +29,68 @@ pipeline {
 
     stage('Run Tests') {
       steps {
-        bat 'npm test || exit /b 0'
+        bat 'npm test 1>test.log 2>&1 || exit /b 0'
+        script {
+          emailext(
+            to: 'ayadiscord123123@gmail.com',
+            subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} - Test Stage Completed",
+            body: """Build URL: ${env.BUILD_URL}
+Stage: Run Tests
+Status: Completed (pipeline continues even if tests fail)
+""",
+            attachmentsPattern: 'test.log',
+            compressLog: true
+          )
+        }
+      }
+    }
+
+    stage('Generate Coverage Report') {
+      steps {
+        bat 'npm run coverage 1>coverage.log 2>&1 || exit /b 0'
       }
     }
 
     stage('NPM Audit (Security Scan)') {
       steps {
-        bat 'npm audit || exit /b 0'
+        bat 'npm audit 1>audit.log 2>&1 || exit /b 0'
         bat 'npm audit --json > audit-report.json || exit /b 0'
+        script {
+          emailext(
+            to: 'ayadiscord123123@gmail.com',
+            subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} - Security Scan (npm audit)",
+            body: """Build URL: ${env.BUILD_URL}
+Stage: NPM Audit (Security Scan)
+Status: Completed (pipeline continues even if issues found)
+Attachments: audit.log (readable), audit-report.json (machine JSON)
+""",
+            attachmentsPattern: 'audit.log,audit-report.json',
+            compressLog: true
+          )
+        }
       }
     }
+  }
 
-    stage('Finalize & Notify') {
-      steps {
-        script {
-          if (fileExists('audit-report.json')) {
-            archiveArtifacts artifacts: 'audit-report.json', allowEmptyArchive: true
-          } else {
-            echo 'No audit-report.json found to archive.'
-          }
-        }
-      }
-      post {
-        success {
-          emailext(
-            to: 'ayadiscord123123@gmail.com',
-            subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} SUCCESS",
-            body: "Build URL: ${env.BUILD_URL}"
-          )
-        }
-        failure {
-          emailext(
-            to: 'ayadiscord123123@gmail.com',
-            subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED",
-            body: "Build URL: ${env.BUILD_URL}"
-          )
-        }
-        always {
-          archiveArtifacts artifacts: 'coverage/**', allowEmptyArchive: true
-        }
-      }
+  post {
+    always {
+      archiveArtifacts artifacts: 'audit-report.json,coverage/**,*.log', allowEmptyArchive: true
+    }
+    success {
+      emailext(
+        to: 'ayadiscord123123@gmail.com',
+        subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} SUCCESS",
+        body: "Build URL: ${env.BUILD_URL}",
+        compressLog: true
+      )
+    }
+    failure {
+      emailext(
+        to: 'ayadiscord123123@gmail.com',
+        subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED",
+        body: "Build URL: ${env.BUILD_URL}",
+        compressLog: true
+      )
     }
   }
 }
