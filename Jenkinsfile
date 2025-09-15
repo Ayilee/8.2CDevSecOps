@@ -29,7 +29,6 @@ pipeline {
 
     stage('Run Tests') {
       steps {
-        // Keep pipeline green even if tests/Snyk require auth
         bat 'npm test || exit /b 0'
       }
     }
@@ -40,47 +39,36 @@ pipeline {
         bat 'npm audit --json > audit-report.json || exit /b 0'
       }
     }
-  }
 
-  post {
-    always {
-      archiveArtifacts artifacts: 'audit-report.json,coverage/**', allowEmptyArchive: true
-    }
-
-    success {
-      echo 'Sending success email...'
-      emailext(
-        to: 'ayadiscord123123@gmail.com',
-        subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} SUCCESS",
-        body: """Build Succeeded
-
-Job:    ${env.JOB_NAME}
-Build:  #${env.BUILD_NUMBER}
-URL:    ${env.BUILD_URL}
-
-Artifacts:
-- audit-report.json
-- coverage/** (if generated)
-""",
-        attachLog: true,
-        compressLog: true
-      )
-    }
-
-    failure {
-      echo 'Sending failure email...'
-      emailext(
-        to: 'ayadiscord123123@gmail.com',
-        subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED",
-        body: """Build Failed
-
-Job:    ${env.JOB_NAME}
-Build:  #${env.BUILD_NUMBER}
-URL:    ${env.BUILD_URL}
-""",
-        attachLog: true,
-        compressLog: true
-      )
+    stage('Finalize & Notify') {
+      steps {
+        script {
+          if (fileExists('audit-report.json')) {
+            archiveArtifacts artifacts: 'audit-report.json', allowEmptyArchive: true
+          } else {
+            echo 'No audit-report.json found to archive.'
+          }
+        }
+      }
+      post {
+        success {
+          emailext(
+            to: 'ayadiscord123123@gmail.com',
+            subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} SUCCESS",
+            body: "Build URL: ${env.BUILD_URL}"
+          )
+        }
+        failure {
+          emailext(
+            to: 'ayadiscord123123@gmail.com',
+            subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED",
+            body: "Build URL: ${env.BUILD_URL}"
+          )
+        }
+        always {
+          archiveArtifacts artifacts: 'coverage/**', allowEmptyArchive: true
+        }
+      }
     }
   }
 }
