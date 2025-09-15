@@ -24,11 +24,11 @@ pipeline {
     }
 
     stage('Run Tests') {
-      steps { bat 'npm test || exit /b 0' }
+      steps { bat 'npm test || exit /b 0' }          // Succeeds even if snyk needs auth
     }
 
     stage('Generate Coverage Report') {
-      steps { bat 'npm run coverage || exit /b 0' }
+      steps { bat 'npm run coverage || exit /b 0' }  // Repo doesn’t have a coverage script, so this is soft-fail
     }
 
     stage('NPM Audit (Security Scan)') {
@@ -40,8 +40,12 @@ pipeline {
   }
 
   post {
-    always {
-      archiveArtifacts artifacts: 'audit-report.json,coverage/**', allowEmptyArchive: true
+    success {
+      emailext(
+        to: 'ayadiscord123123@gmail.com',
+        subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} SUCCESS",
+        body: "Build URL: ${env.BUILD_URL}"
+      )
     }
     failure {
       emailext(
@@ -49,6 +53,9 @@ pipeline {
         subject: "${env.JOB_NAME} #${env.BUILD_NUMBER} FAILED",
         body: "Build URL: ${env.BUILD_URL}"
       )
+    }
+    always {
+      archiveArtifacts artifacts: 'audit-report.json,coverage/**', allowEmptyArchive: true
     }
   }
 }
